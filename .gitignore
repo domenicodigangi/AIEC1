@@ -1,4 +1,5 @@
 .DS_Store
+.idea/
 .env
 content/
 __pycache__/
