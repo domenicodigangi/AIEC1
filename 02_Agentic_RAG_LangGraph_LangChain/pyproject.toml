@@ -17,3 +17,6 @@ dependencies = [
 
 [tool.uv]
 package = false
+# aiohttp 3.14.1 shipped only cp312 wheels (no cp313 wheel, no sdist), breaking
+# installs on Python 3.13. Pin it out until a release with full wheel coverage.
+constraint-dependencies = ["aiohttp!=3.14.1"]
