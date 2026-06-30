@@ -155,7 +155,14 @@ Why is OAuth important for MCP servers, and what security considerations should 
 
 #### Answer
 
-_(insert your answer here)_
+OAuth matters because MCP tools act on the user's behalf — checkout and add_to_cart change real state, so the server must know who's calling without ever holding the user's password. OAuth issues a scoped, expiring, revocable token tied to a user, which is why checkout requires auth (via _get_username()) while read-only tools like list_products don't.
+
+Key things to keep in mind when exposing tools to AI clients:
+
+Least privilege — grant only the scopes a tool needs.
+Short-lived, revocable tokens — limit the damage from a leak.
+Treat the AI as untrusted — it can be prompt-injected, so scoped auth caps what a tricked agent can do.
+Use HTTPS so tokens aren't exposed in transit.
 
 ### Question #2
 
@@ -163,7 +170,9 @@ What is Streamable HTTP transport in MCP, and why might you expose a server publ
 
 #### Answer
 
-_(insert your answer here)_
+Streamable HTTP is MCP's network transport: the server runs as a standalone HTTP service (here, mcp.run(transport="streamable-http") on /mcp) that clients reach over the network, with the ability to stream responses back incrementally. stdio, by contrast, runs the server as a local subprocess talking over stdin/stdout — local, single-client, no network, no auth.
+
+You'd expose a server publicly with OAuth instead of stdio when it isn't on the same machine as the client, serves multiple users, or needs real authentication and per-user isolation (e.g. keeping each user's cart separate). stdio's security model is "trust because we're on the same machine" — once the server is reachable over a network, that's gone, so OAuth replaces it with scoped, revocable tokens. The ngrok step makes this concrete: the moment your localhost server gets a public URL, auth stops being optional.
 
 ## Activity 1: Extend the MCP Server
 
