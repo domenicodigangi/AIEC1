@@ -178,6 +178,36 @@ You'd expose a server publicly with OAuth instead of stdio when it isn't on the 
 
 Add at least one new tool to the cat shop MCP server (e.g., `search_products`, `update_cart_quantity`, or `get_order_history`). Ensure the new tool integrates properly with the existing database and OAuth authentication. Demo the new tool through an MCP client and include it in your Loom video.
 
+#### Solution
+
+Added a new `search_product` tool in [`app/tools.py`](app/tools.py). It searches the
+catalog by matching a query against product `name` or `description` using a SQL
+`LIKE '%query%'` filter, and returns the matching products (an empty list if none
+match).
+
+```python
+@mcp.tool()
+async def search_product(product_name: str) -> list[dict]:
+    """Search the catalog for products whose name or description matches a query. Returns an empty list if nothing matches."""
+    db = await oauth_provider._get_db()
+    cursor = await db.execute(
+        "SELECT id, name, description, price, category FROM products WHERE name LIKE ? OR description LIKE ?",
+        (f"%{product_name}%", f"%{product_name}%"),
+    )
+    rows = await cursor.fetchall()
+    return [
+        {"id": r[0], "name": r[1], "description": r[2], "price": r[3], "category": r[4]}
+        for r in rows
+    ]
+```
+
+It integrates with the existing setup the same way the built-in tools do: it is
+registered with `@mcp.tool()` (so it's auto-discovered by MCP clients) and reads
+from the shared product database via `oauth_provider._get_db()`. Like the other
+read-only catalog tools (`list_products`, `get_product`), it does not gate on
+`_get_username()` — only cart/checkout tools require an authenticated user — so it
+still runs behind the same OAuth-protected `/mcp` endpoint as every other tool.
+
 ## Advanced Activity: Build a Custom MCP Client
 
 Build a custom MCP client that connects to the cat shop server over Streamable HTTP, authenticates via OAuth, and orchestrates a multi-step shopping flow (browse → add to cart → checkout). Compare the developer experience of MCP-based tool integration vs. traditional REST API calls.
