@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {
+      "root": "frontend/",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "agent",
+          "format": "url",
+          "env": "LANGGRAPH_API_URL"
+        }
+      ]
+    },
+    "agent": {
+      "runtime": "container",
+      "root": ".",
+      "entrypoint": "Dockerfile.vercel"
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}

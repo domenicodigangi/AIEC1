@@ -1,29 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useStream } from "@langchain/react";
-import {
-  Bot,
-  FileText,
-  Loader2,
-  Search,
-  Send,
-  User,
-  Wrench,
-} from "lucide-react";
+import { Cat } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Loader } from "@/components/ai-elements/loader";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputToolbar,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+  type ToolState,
+} from "@/components/ai-elements/tool";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { getMessageText, toolLabel } from "@/lib/messages";
+import { getMessageText, getReasoningText, toolLabel } from "@/lib/messages";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 type StreamMessage = ReturnType<typeof useStream>["messages"][number];
+
+type ToolCall = { name?: string; id?: string; args?: unknown };
 
 const SUGGESTIONS = [
   "How often should I deworm my cat?",
@@ -31,22 +52,30 @@ const SUGGESTIONS = [
   "What are signs of feline dehydration?",
 ];
 
-function toolIcon(name?: string) {
-  if (name === "retrieve_information") return <FileText className="size-3" />;
-  if (name?.startsWith("tavily")) return <Search className="size-3" />;
-  return <Wrench className="size-3" />;
-}
-
 export function Chat({ assistantId }: { assistantId: string }) {
   const stream = useStream({ apiUrl: API_URL, assistantId });
   const { messages, isLoading, error } = stream;
 
   const [input, setInput] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isLoading]);
+  const toolResults = useMemo(() => {
+    const map = new Map<string, StreamMessage>();
+    for (const message of messages) {
+      if (message.type === "tool") {
+        const id = (message as unknown as { tool_call_id?: string })
+          .tool_call_id;
+        if (id) map.set(id, message);
+      }
+    }
+    return map;
+  }, [messages]);
+
+  const lastIndex = messages.length - 1;
+  const waiting =
+    isLoading &&
+    (messages.length === 0 ||
+      messages[lastIndex]?.type === "human" ||
+      messages[lastIndex]?.type === "tool");
 
   const send = (text: string) => {
     const content = text.trim();
@@ -57,44 +86,64 @@ export function Chat({ assistantId }: { assistantId: string }) {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) {
+      stream.stop?.();
+      return;
+    }
     send(input);
   };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="flex-1">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-          {messages.length === 0 && (
-            <div className="mt-10 flex flex-col items-center gap-6 text-center">
-              <div className="flex size-14 items-center justify-center rounded-full bg-muted">
-                <Bot className="size-7 text-muted-foreground" />
+      <Conversation>
+        <ConversationContent className="mx-auto w-full max-w-3xl gap-6">
+          {messages.length === 0 ? (
+            <ConversationEmptyState className="mt-10">
+              <div className="flex size-full flex-col items-center justify-center gap-6 p-8 text-center">
+                <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+                  <Cat className="size-7 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-medium">Ask the cat health agent</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Streams from your LangGraph deployment via a secure proxy.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => send(s)}
+                      className="rounded-full border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1">
-                <h2 className="text-lg font-medium">Ask the cat health agent</h2>
-                <p className="text-sm text-muted-foreground">
-                  Streams from your LangGraph deployment via a secure proxy.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <Button
-                    key={s}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => send(s)}
-                  >
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            </ConversationEmptyState>
+          ) : (
+            messages.map((message, i) => (
+              <MessageView
+                key={message.id ?? i}
+                message={message}
+                toolResults={toolResults}
+                isStreaming={isLoading && i === lastIndex}
+              />
+            ))
           )}
 
-          {messages.map((message, i) => (
-            <MessageRow key={message.id ?? i} message={message} />
-          ))}
-
-          {isLoading && <ThinkingRow />}
+          {waiting && (
+            <Message from="assistant">
+              <MessageContent>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader size={16} />
+                  <Shimmer duration={1.5}>Thinking...</Shimmer>
+                </div>
+              </MessageContent>
+            </Message>
+          )}
 
           {error != null && (
             <Card className="border-destructive/40">
@@ -103,130 +152,98 @@ export function Chat({ assistantId }: { assistantId: string }) {
               </CardContent>
             </Card>
           )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
-          <div ref={endRef} />
+      <div className="bg-background">
+        <div className="mx-auto w-full max-w-3xl px-4 py-3">
+          <PromptInput onSubmit={onSubmit}>
+            <PromptInputTextarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Message the agent..."
+              autoFocus
+            />
+            <PromptInputToolbar>
+              <PromptInputTools>
+                <span className="pl-2 text-xs text-muted-foreground">
+                  Enter to send, Shift+Enter for newline
+                </span>
+              </PromptInputTools>
+              <PromptInputSubmit
+                status={isLoading ? "streaming" : "ready"}
+                disabled={!isLoading && input.trim().length === 0}
+              />
+            </PromptInputToolbar>
+          </PromptInput>
         </div>
-      </ScrollArea>
-
-      <div className="border-t bg-background">
-        <form
-          onSubmit={onSubmit}
-          className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-3"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Message the agent..."
-            disabled={isLoading}
-            className="h-10"
-            autoFocus
-          />
-          <Button
-            type="submit"
-            size="lg"
-            disabled={isLoading || input.trim().length === 0}
-            className="h-10"
-          >
-            {isLoading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
-          </Button>
-        </form>
       </div>
     </div>
   );
 }
 
-function MessageRow({ message }: { message: StreamMessage }) {
-  const isHuman = message.type === "human";
-  const isTool = message.type === "tool";
-  const text = getMessageText(message.content);
-  const toolCalls =
-    message.type === "ai"
-      ? (message as unknown as {
-          tool_calls?: Array<{ name?: string; id?: string }>;
-        }).tool_calls ?? []
-      : [];
+function MessageView({
+  message,
+  toolResults,
+  isStreaming,
+}: {
+  message: StreamMessage;
+  toolResults: Map<string, StreamMessage>;
+  isStreaming: boolean;
+}) {
+  // Tool result messages are rendered inline within their parent AI message.
+  if (message.type === "tool") return null;
 
-  if (isTool) {
+  if (message.type === "human") {
+    const text = getMessageText(message.content);
     return (
-      <div className="mx-auto w-full max-w-3xl">
-        <details className="group rounded-lg border bg-muted/40 text-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-muted-foreground">
-            {toolIcon(message.name)}
-            <span className="font-medium text-foreground">
-              {toolLabel(message.name)}
-            </span>
-            <span className="text-xs">tool result</span>
-          </summary>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap px-3 pb-3 text-xs text-muted-foreground">
-            {text}
-          </pre>
-        </details>
-      </div>
+      <Message from="user">
+        <MessageContent>
+          <p className="whitespace-pre-wrap">{text}</p>
+        </MessageContent>
+      </Message>
     );
   }
 
-  return (
-    <div
-      className={cn(
-        "flex w-full items-start gap-3",
-        isHuman && "flex-row-reverse"
-      )}
-    >
-      <Avatar>
-        <AvatarFallback>
-          {isHuman ? (
-            <User className="size-4" />
-          ) : (
-            <Bot className="size-4" />
-          )}
-        </AvatarFallback>
-      </Avatar>
+  const text = getMessageText(message.content);
+  const reasoning = getReasoningText(message);
+  const toolCalls =
+    (message as unknown as { tool_calls?: ToolCall[] }).tool_calls ?? [];
 
-      <div className={cn("flex max-w-[80%] flex-col gap-2", isHuman && "items-end")}>
-        {toolCalls.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {toolCalls.map((tc, idx) => (
-              <Badge key={tc.id ?? idx} variant="secondary">
-                {toolIcon(tc.name)}
-                {toolLabel(tc.name)}
-              </Badge>
-            ))}
-          </div>
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        {reasoning && (
+          <Reasoning isStreaming={isStreaming && !text}>
+            <ReasoningTrigger />
+            <ReasoningContent>{reasoning}</ReasoningContent>
+          </Reasoning>
         )}
 
-        {text && (
-          <div
-            className={cn(
-              "rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap",
-              isHuman
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground"
-            )}
-          >
-            {text}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        {toolCalls.map((tc, idx) => {
+          const result = tc.id ? toolResults.get(tc.id) : undefined;
+          const output = result ? getMessageText(result.content) : undefined;
+          const state: ToolState = output
+            ? "output-available"
+            : "input-available";
+          return (
+            <Tool key={tc.id ?? idx} defaultOpen={false}>
+              <ToolHeader
+                title={toolLabel(tc.name)}
+                type={tc.name ?? "tool"}
+                state={state}
+              />
+              <ToolContent>
+                <ToolInput input={tc.args} />
+                <ToolOutput output={output} />
+              </ToolContent>
+            </Tool>
+          );
+        })}
 
-function ThinkingRow() {
-  return (
-    <div className="flex w-full items-start gap-3">
-      <Avatar>
-        <AvatarFallback>
-          <Bot className="size-4" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Thinking...
-      </div>
-    </div>
+        {text && <MessageResponse>{text}</MessageResponse>}
+      </MessageContent>
+    </Message>
   );
 }

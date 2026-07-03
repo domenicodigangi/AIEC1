@@ -4,7 +4,8 @@ import { Cat } from "lucide-react";
 
 import { Chat } from "@/components/chat";
 
-const ASSISTANT_ID = "simple_agent";
+const ASSISTANT_ID =
+  process.env.NEXT_PUBLIC_ASSISTANT_ID ?? "simple_agent";
 
 export default function Page() {
   return (
