@@ -4,22 +4,28 @@ import os
 from functools import lru_cache
 from typing import Annotated
 
-import tiktoken
-from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
 from langchain_core.tools import tool
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def _tiktoken_len(text: str) -> int:
+    # Imported lazily: tiktoken pulls heavy native deps that would otherwise slow
+    # cold-start import (and it's only needed when the retriever is built).
+    import tiktoken
+
     return len(tiktoken.encoding_for_model("gpt-4o").encode(text))
 
 
 @lru_cache(maxsize=1)
 def _get_retriever():
+    # Heavy imports (pymupdf, qdrant, numpy, embeddings) are deferred to first use
+    # so importing the graph stays fast enough for serverless startup limits.
+    from langchain_community.document_loaders import DirectoryLoader, PyMuPDFLoader
+    from langchain_openai.embeddings import OpenAIEmbeddings
+    from langchain_qdrant import QdrantVectorStore
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     data_dir = os.environ.get("RAG_DATA_DIR", "data")
 
     try:

@@ -40,7 +40,17 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMessageText, getReasoningText, toolLabel } from "@/lib/messages";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+// The SDK builds requests with `new URL(...)`, which needs an absolute URL.
+// Resolve the passthrough route against the current origin in the browser.
+function resolveApiUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured && /^https?:\/\//.test(configured)) return configured;
+  const path = configured ?? "/api";
+  if (typeof window !== "undefined") {
+    return new URL(path, window.location.origin).toString();
+  }
+  return path;
+}
 
 type StreamMessage = ReturnType<typeof useStream>["messages"][number];
 
@@ -53,7 +63,8 @@ const SUGGESTIONS = [
 ];
 
 export function Chat({ assistantId }: { assistantId: string }) {
-  const stream = useStream({ apiUrl: API_URL, assistantId });
+  const apiUrl = useMemo(() => resolveApiUrl(), []);
+  const stream = useStream({ apiUrl, assistantId });
   const { messages, isLoading, error } = stream;
 
   const [input, setInput] = useState("");
