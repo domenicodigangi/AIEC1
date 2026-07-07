@@ -83,7 +83,9 @@ What is the difference between serverless and dedicated endpoints?
 
 #### ✅ Answer:
 
-_(insert your answer here)_
+Serverless endpoints are shared, managed endpoints that scale automatically and are usually billed based on usage. They are easy to start with because I do not need to manage infrastructure, but performance can vary depending on provider load.
+
+Dedicated endpoints reserve compute resources for a specific model deployment. They usually provide more predictable latency, throughput, and availability, but they cost more and must be shut down when no longer needed.
 
 ### ❓ Question #2:
 
@@ -91,7 +93,9 @@ Why is it important to consider token throughput and latency when choosing an LL
 
 #### ✅ Answer:
 
-_(insert your answer here)_
+Token throughput and latency directly affect the user experience. Low latency makes an application feel responsive, while high throughput allows the model to generate longer responses or serve more users at once.
+
+For user-facing applications, slow responses can lead to poor UX, timeouts, higher costs, and difficulty scaling. Choosing an LLM means balancing quality, speed, cost, and reliability.
 
 ## Activity 1: RAGAS Evaluation with Cost Analysis
 

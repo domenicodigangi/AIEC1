@@ -20,8 +20,7 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_fireworks import ChatFireworks, FireworksEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langgraph.graph import START, StateGraph
 
@@ -68,12 +67,18 @@ def _build_rag_graph(data_dir: str):
     chunks = text_splitter.split_documents(documents) if documents else []
 
     # Embeddings and vector store (in-memory Qdrant)
-    embedding_model = OpenAIEmbeddings(
-        model=os.environ.get("FIREWORKS_EMBEDDING_MODEL", "accounts/fireworks/models/qwen3-embedding-8b"),
-        openai_api_key=os.environ["FIREWORKS_API_KEY"],
-        openai_api_base="https://api.fireworks.ai/inference/v1",
-        check_embedding_ctx_length=False,
-        dimensions=4096,
+    fireworks_api_key = os.environ.get("FIREWORKS_API_KEY")
+    if not fireworks_api_key:
+        raise ValueError(
+            "FIREWORKS_API_KEY is not set. Run the setup cell first or add it to a .env file."
+        )
+
+    embedding_model_name = os.environ.get(
+        "FIREWORKS_EMBEDDING_MODEL", "accounts/fireworks/models/qwen3-embedding-8b"
+    )
+    embedding_model = FireworksEmbeddings(
+        model=embedding_model_name,
+        fireworks_api_key=fireworks_api_key,
     )
     qdrant_vectorstore = QdrantVectorStore.from_documents(
         documents=chunks,
@@ -90,10 +95,9 @@ def _build_rag_graph(data_dir: str):
         "Only use the provided context to answer the query. If you do not know the answer, or it's not contained in the provided context respond with \"I don't know\""
     )
     chat_prompt = ChatPromptTemplate.from_messages([("human", human_template)])
-    generator_llm = ChatOpenAI(
+    generator_llm = ChatFireworks(
         model=os.environ.get("FIREWORKS_CHAT_MODEL", "accounts/fireworks/models/gpt-oss-20b"),
-        openai_api_key=os.environ["FIREWORKS_API_KEY"],
-        openai_api_base="https://api.fireworks.ai/inference/v1",
+        fireworks_api_key=fireworks_api_key,
     )
 
     def retrieve(state: _RAGState) -> _RAGState:
@@ -101,9 +105,12 @@ def _build_rag_graph(data_dir: str):
         return {"context": retrieved_docs}  # type: ignore
 
     def generate(state: _RAGState) -> _RAGState:
+        context_text = "\n\n".join(
+            doc.page_content for doc in state.get("context", [])
+        )
         generator_chain = chat_prompt | generator_llm | StrOutputParser()
         response_text = generator_chain.invoke(
-            {"query": state["question"], "context": state.get("context", [])}
+            {"query": state["question"], "context": context_text}
         )
         return {"response": response_text}  # type: ignore
 
