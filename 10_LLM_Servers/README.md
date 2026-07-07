@@ -101,7 +101,41 @@ For user-facing applications, slow responses can lead to poor UX, timeouts, high
 
 Use RAGAS to evaluate your open-source Fireworks AI powered RAG app against an OpenAI `gpt-4.1-mini` powered equivalent. Compare retrieval quality, answer faithfulness, and end-to-end accuracy across both providers.
 
-Additionally, instrument both pipelines with **LangSmith** to capture token usage and cost per query. Use LangSmith's tracing and cost dashboards to compare the total cost of running each provider at scale. Include your evaluation results, cost breakdown, and analysis in your Loom video.
+Additionally, instrument both pipelines with **LangSmith** to capture token usage and cost per query. Use LangSmith's tracing and cost dashboards to compare the total cost of running each provider at scale.
+
+### Deliverable
+
+Run and save outputs for **`activity1_ragas_evaluation.ipynb`**. The notebook is self-contained: it runs both pipelines, computes RAGAS scores, points to the LangSmith cost views, and prints a written summary at the end.
+
+### What the notebook does
+
+`activity1_ragas_evaluation.ipynb` builds two minimal RAG pipelines on the same cat-health PDF:
+
+| Provider | Chat model | Embedding model | LangSmith project |
+|----------|------------|-----------------|-------------------|
+| **Fireworks** | `gpt-oss-20b` | `qwen3-embedding-8b` | `session10-rag-fireworks` |
+| **OpenAI** | `gpt-4.1-mini` | `text-embedding-3-small` | `session10-rag-openai` |
+
+Both pipelines are scored with RAGAS metrics:
+
+- `context_recall` — did retrieval surface the right context?
+- `faithfulness` — is the answer grounded in retrieved context?
+- `answer_accuracy` — does the answer match the reference?
+
+The RAGAS judge uses `gpt-4.1-mini` so both providers are evaluated with the same scorer.
+
+### Setup
+
+```bash
+cd 10_LLM_Servers
+uv sync
+```
+
+Set these in a `.env` file or enter them when prompted in the notebook:
+
+- `FIREWORKS_API_KEY`
+- `OPENAI_API_KEY`
+- `LANGSMITH_API_KEY`
 
 ## Advanced Activity: Local Models
 
