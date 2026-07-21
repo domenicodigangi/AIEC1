@@ -10,6 +10,7 @@ dependencies = [
     "langchain-qdrant>=0.2",
     "qdrant-client>=1.12",
     "sentence-transformers>=3.0",
+    "torch",
     "pillow>=10.0",
     "matplotlib>=3.9",
     "imageio>=2.34",
@@ -23,3 +24,12 @@ dev = [
     "ipykernel>=6.29",
     "jupyter>=1.1",
 ]
+
+# CPU-only torch — avoids multi-GB NVIDIA CUDA wheels on this machine.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
